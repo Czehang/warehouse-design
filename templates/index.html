@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仓库设计系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            background: linear-gradient(to bottom, #2d2d2d, #252525);
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4fc3f7;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .navbar-title::before {
+            content: '🏭';
+            font-size: 18px;
+        }
+
+        .navbar-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .navbar-btn {
+            padding: 6px 12px;
+            background: linear-gradient(to bottom, #404040, #353535);
+            color: #e0e0e0;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s ease;
+        }
+
+        .navbar-btn:hover {
+            background: linear-gradient(to bottom, #4a4a4a, #404040);
+            border-color: #5a5a5a;
+        }
+
+        .navbar-btn.active {
+            background: linear-gradient(to bottom, #1976d2, #1565c0);
+            border-color: #2196f3;
+            color: #fff;
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            position: fixed;
+            left: 0;
+            top: 48px;
+            bottom: 28px;
+            width: 280px;
+            background: linear-gradient(to bottom, #242424, #1e1e1e);
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            padding: 12px;
+            z-index: 900;
+        }
+
+        /* 面板区块 */
+        .panel-section {
+            margin-bottom: 12px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            border: 1px solid #383838;
+            overflow: hidden;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 12px;
+            color: #fff;
+            background: linear-gradient(to right, #333, #2a2a2a);
+            border-bottom: 1px solid #404040;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            transition: background 0.15s;
+        }
+
+        .panel-title:hover {
+            background: linear-gradient(to right, #3a3a3a, #333);
+        }
+
+        .panel-title::before {
+            font-size: 14px;
+        }
+
+        .panel-title[data-icon="settings"]::before {
+            content: '⚙️';
+        }
+
+        .panel-title[data-icon="shelf"]::before {
+            content: '📦';
+        }
+
+        .panel-title[data-icon="selected"]::before {
+            content: '✏️';
+        }
+
+        .panel-title[data-icon="parts"]::before {
+            content: '🧱';
+        }
+
+        .panel-title[data-icon="part-edit"]::before {
+            content: '🔧';
+        }
+
+        .panel-title[data-icon="camera"]::before {
+            content: '📷';
+        }
+
+        .panel-title .collapse-icon {
+            margin-left: auto;
+            font-size: 10px;
+            color: #888;
+            transition: transform 0.2s;
+        }
+
+        .panel-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .panel-content {
+            padding: 12px;
+            transition: max-height 0.3s ease, opacity 0.2s;
+        }
+
+        .panel-section.collapsed .panel-content {
+            display: none;
+        }
+
+        /* 表单 */
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 7px 10px;
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #4fc3f7;
+            box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.2);
+        }
+
+        .form-input:hover,
+        .form-select:hover {
+            border-color: #555;
+        }
+
+        /* 按钮 */
+        .btn {
+            padding: 8px 14px;
+            background: linear-gradient(to bottom, #1976d2, #1565c0);
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.15s;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+
+        .btn:hover {
+            background: linear-gradient(to bottom, #1e88e5, #1976d2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(to bottom, #424242, #363636);
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(to bottom, #4a4a4a, #424242);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(to bottom, #c62828, #b71c1c);
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(to bottom, #d32f2f, #c62828);
+            box-shadow: 0 2px 8px rgba(198, 40, 40, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(to bottom, #2e7d32, #1b5e20);
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(to bottom, #388e3c, #2e7d32);
+        }
+
+        .divider {
+            height: 1px;
+            background: #444;
+            margin: 10px 0;
+        }
+
+        /* 按钮组 - 网格布局 */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .btn-grid .btn {
+            margin-bottom: 0;
+            font-size: 12px;
+            padding: 6px 8px;
+        }
+
+        .btn-grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        /* 分隔线 */
+        .divider {
+            height: 1px;
+            background: #404040;
+            margin: 10px 0;
+        }
+
+        /* 3D场景 */
+        .scene-container {
+            position: fixed;
+            left: 280px;
+            top: 48px;
+            right: 0;
+            bottom: 28px;
+            background: #000;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            position: fixed;
+            left: 280px;
+            right: 0;
+            bottom: 0;
+            height: 28px;
+            background: linear-gradient(to bottom, #2a2a2a, #222);
+            border-top: 1px solid #3a3a3a;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 11px;
+            color: #999;
+            z-index: 1000;
+            gap: 16px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-value {
+            color: #4fc3f7;
+            font-weight: 600;
+        }
+
+        /* 信息面板 */
+        .info-panel {
+            position: fixed;
+            right: 16px;
+            top: 64px;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 16px;
+            min-width: 220px;
+            max-width: 280px;
+            backdrop-filter: blur(12px);
+            display: none;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .info-panel.visible {
+            display: block;
+            animation: slideIn 0.2s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .info-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #4fc3f7;
+            border-bottom: 1px solid #4fc3f7;
+            padding-bottom: 8px;
+            text-align: center;
+        }
+
+        .info-content {
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #888;
+        }
+
+        .info-value {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 320px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #fff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .modal-body {
+            margin-bottom: 16px;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .modal-footer .btn {
+            width: auto;
+            margin-bottom: 0;
+        }
+
+        .color-picker-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .color-picker-label {
+            font-size: 13px;
+            color: #bbb;
+            min-width: 90px;
+        }
+
+        .color-picker-input {
+            width: 50px;
+            height: 32px;
+            padding: 2px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1e1e1e;
+            cursor: pointer;
+        }
+
+        .color-hex-input {
+            width: 80px;
+            padding: 6px 8px;
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        /* 提示信息 */
+        .hint-box {
+            color: #ffc107;
+            font-size: 11px;
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(255, 193, 7, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid #ffc107;
+        }
+
+        /* SKU模态框样式 */
+        .sku-modal-content {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        }
+
+        .sku-modal-header {
+            font-size: 18px;
+            font-weight: 600;
+            padding: 16px 20px;
+            color: #fff;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sku-modal-header .close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .sku-modal-header .close-btn:hover {
+            color: #fff;
+        }
+
+        .sku-modal-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* SKU列表区域 */
+        .sku-list-section {
+            width: 320px;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sku-list-header {
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4fc3f7;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+
+        #skuListContainer {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .sku-empty {
+            padding: 24px 16px;
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .sku-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: #333;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .sku-item:hover {
+            background: #3a3a3a;
+        }
+
+        .sku-thumbnail {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .sku-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .sku-no-image {
+            font-size: 24px;
+        }
+
+        .sku-info {
+            flex: 1;
+            margin-left: 12px;
+            min-width: 0;
+        }
+
+        .sku-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sku-code {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .sku-dimensions {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .sku-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .sku-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 4px;
+            background: #444;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .sku-btn:hover {
+            background: #555;
+        }
+
+        .sku-btn-delete:hover {
+            background: #c62828;
+        }
+
+        /* SKU表单区域 */
+        .sku-form-section {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sku-form-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4fc3f7;
+            margin-bottom: 16px;
+        }
+
+        .sku-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .sku-form-row.triple {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .sku-form-group {
+            margin-bottom: 12px;
+        }
+
+        .sku-form-group label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+
+        .sku-form-group input {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        .sku-form-group input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+
+        /* 图片上传区域 */
+        .sku-image-upload {
+            margin-bottom: 16px;
+        }
+
+        .sku-image-upload label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        #skuImagePreview {
+            width: 120px;
+            height: 120px;
+            border: 2px dashed #444;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            overflow: hidden;
+        }
+
+        #skuImagePreview:hover {
+            border-color: #4fc3f7;
+        }
+
+        #skuImagePreview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .upload-placeholder {
+            color: #666;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .upload-loading {
+            color: #4fc3f7;
+            font-size: 12px;
+        }
+
+        #skuImageInput {
+            display: none;
+        }
+
+        /* 多面贴图上传区域 */
+        .sku-textures-upload {
+            margin-bottom: 16px;
+        }
+
+        .sku-textures-upload label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        .textures-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .texture-upload-item {
+            position: relative;
+        }
+
+        .texture-upload-label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+
+        .texture-preview {
+            width: 100%;
+            height: 80px;
+            border: 2px dashed #444;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            overflow: hidden;
+            background: #1e1e1e;
+        }
+
+        .texture-preview:hover {
+            border-color: #4fc3f7;
+        }
+
+        .texture-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .texture-preview .upload-placeholder {
+            color: #666;
+            font-size: 10px;
+            text-align: center;
+            padding: 4px;
+        }
+
+        .texture-preview .upload-loading {
+            color: #4fc3f7;
+            font-size: 10px;
+        }
+
+        .texture-remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(198, 40, 40, 0.9);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .texture-upload-item:hover .texture-remove-btn,
+        .texture-upload-item.has-texture .texture-remove-btn {
+            display: flex;
+        }
+
+        .texture-remove-btn:hover {
+            background: rgba(198, 40, 40, 1);
+        }
+
+        .texture-input {
+            display: none;
+        }
+
+        .sku-form-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .sku-form-actions .btn {
+            flex: 1;
+        }
+
+        /* 货物选择模态框样式 */
+        .cargo-modal-content {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            width: 480px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        }
+
+        .cargo-modal-header {
+            font-size: 16px;
+            font-weight: 600;
+            padding: 16px 20px;
+            color: #fff;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cargo-modal-header .close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .cargo-modal-header .close-btn:hover {
+            color: #fff;
+        }
+
+        .cargo-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .cargo-sku-list-title {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 12px;
+        }
+
+        #cargoSkuListContainer {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .cargo-sku-empty {
+            padding: 32px 16px;
+            text-align: center;
+            color: #666;
+        }
+
+        .cargo-sku-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #333;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .cargo-sku-item:hover {
+            background: #3a3a3a;
+        }
+
+        .cargo-sku-item.selected {
+            border-color: #4fc3f7;
+            background: rgba(79, 195, 247, 0.1);
+        }
+
+        .cargo-sku-thumbnail {
+            width: 56px;
+            height: 56px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .cargo-sku-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .cargo-sku-no-image {
+            font-size: 28px;
+        }
+
+        .cargo-sku-info {
+            flex: 1;
+            margin-left: 14px;
+        }
+
+        .cargo-sku-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .cargo-sku-code {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .cargo-sku-dimensions {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .cargo-modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #444;
+            display: flex;
+            gap: 10px;
+        }
+
+        .cargo-modal-footer .btn {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        #cargoPlacementHint {
+            margin-top: 12px;
+            padding: 10px;
+            background: rgba(79, 195, 247, 0.1);
+            border-radius: 4px;
+            color: #4fc3f7;
+            font-size: 12px;
+            display: none;
+        }
+
+        /* 库道模式样式 */
+        .aisle-mode-active {
+            background: linear-gradient(to bottom, #ff9800, #f57c00) !important;
+            border-color: #ff9800 !important;
+        }
+
+        .aisle-mode-active:hover {
+            background: linear-gradient(to bottom, #ffa726, #ff9800) !important;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 导航栏 -->
+    <div class="navbar">
+        <div class="navbar-title">仓库设计系统</div>
+        <div class="navbar-buttons">
+            <button class="navbar-btn" onclick="exportConfig()">导出配置</button>
+            <button class="navbar-btn" onclick="importConfig()">导入配置</button>
+            <button class="navbar-btn" onclick="resetView()">重置视图</button>
+        </div>
+        <div class="navbar-buttons">
+            <button class="navbar-btn" id="modeToggleBtn" onclick="toggleMode()">移动模式</button>
+            <button class="navbar-btn active" id="snapToggleBtn" onclick="toggleSnap()">吸附: 开</button>
+            <button class="navbar-btn active" id="envToggleBtn" onclick="toggleEnvironment()">显示环境</button>
+            <button class="navbar-btn" id="envConfigBtn" onclick="openEnvConfig()">环境配置</button>
+            <button class="navbar-btn" id="skuConfigBtn" onclick="openSkuModal()">📦 SKU配置</button>
+        </div>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="control-panel">
+        <!-- 全局参数设置 -->
+        <div class="panel-section">
+            <div class="panel-title" data-icon="settings" onclick="togglePanel(this)">
+                全局参数设置
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">库区数量</label>
+                        <input type="number" class="form-input" id="areaCount" min="1" max="20" value="4">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">通道数量</label>
+                        <input type="number" class="form-input" id="channelCount" min="1" max="10" value="2">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">层数</label>
+                        <input type="number" class="form-input" id="layerCount" min="1" max="10" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">格口数量</label>
+                        <input type="number" class="form-input" id="cellCount" min="1" max="50" value="20">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">单位</label>
+                    <select class="form-select" id="unit">
+                        <option value="米">米</option>
+                        <option value="厘米">厘米</option>
+                        <option value="千米">千米</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="applyGlobalConfig()">应用全局配置</button>
+            </div>
+        </div>
+
+        <!-- 货架操作 -->
+        <div class="panel-section">
+            <div class="panel-title" data-icon="shelf" onclick="togglePanel(this)">
+                货架操作
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <button class="btn" onclick="initializeShelves()">初始化布局</button>
+                <div class="btn-grid">
+                    <button class="btn btn-secondary" onclick="addShelf()">添加货架</button>
+                    <button class="btn btn-secondary" onclick="clearSelection()">清除选择</button>
+                </div>
+                <div class="divider"></div>
+                <button class="btn btn-success" onclick="openAddCargoModal()">📦 添加货物</button>
+            </div>
+        </div>
+
+        <!-- 选中货架控制 -->
+        <div class="panel-section" id="selectedShelfPanel" style="display: none;">
+            <div class="panel-title" data-icon="selected" onclick="togglePanel(this)">
+                选中货架控制
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">X 坐标</label>
+                        <input type="number" class="form-input" id="shelfX" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Y 坐标</label>
+                        <input type="number" class="form-input" id="shelfZ" step="0.1">
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="applyPosition()">应用位置</button>
+
+                <div class="divider"></div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">宽度</label>
+                        <input type="number" class="form-input" id="shelfWidth" step="0.1" min="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">高度</label>
+                        <input type="number" class="form-input" id="shelfHeight" step="0.1" min="0.1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">深度</label>
+                    <input type="number" class="form-input" id="shelfDepth" step="0.1" min="0.1">
+                </div>
+                <button class="btn btn-secondary" onclick="applyDimensions()">应用尺寸</button>
+
+                <div class="divider"></div>
+
+                <div class="btn-grid">
+                    <button class="btn btn-secondary" onclick="alignShelf('front')">前对齐</button>
+                    <button class="btn btn-secondary" onclick="alignShelf('back')">后对齐</button>
+                    <button class="btn btn-secondary" onclick="alignShelf('left')">左对齐</button>
+                    <button class="btn btn-secondary" onclick="alignShelf('right')">右对齐</button>
+                </div>
+                <div class="btn-grid">
+                    <button class="btn btn-secondary" onclick="distributeShelves('horizontal')">水平等距</button>
+                    <button class="btn btn-secondary" onclick="distributeShelves('vertical')">垂直等距</button>
+                </div>
+                <button class="btn btn-secondary" onclick="rotateShelf()">旋转90°</button>
+
+                <div class="divider"></div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">格口数量</label>
+                        <input type="number" class="form-input" id="shelfCellCount" min="1" max="50" value="20">
+                    </div>
+                    <div>
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-secondary" onclick="applyCellCount()"
+                            style="margin-bottom:0;">应用</button>
+                    </div>
+                </div>
+
+                <button class="btn btn-danger" onclick="deleteShelf()">删除货架</button>
+            </div>
+        </div>
+
+        <!-- 选中货物控制 -->
+        <div class="panel-section" id="selectedCargoPanel" style="display: none;">
+            <div class="panel-title" data-icon="selected" onclick="togglePanel(this)">
+                选中货物控制
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="form-group">
+                    <label class="form-label">货物名称</label>
+                    <input type="text" class="form-input" id="cargoName" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SKU编码</label>
+                    <input type="text" class="form-input" id="cargoSkuCode" readonly>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">X 坐标</label>
+                        <input type="number" class="form-input" id="cargoX" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Z 坐标</label>
+                        <input type="number" class="form-input" id="cargoZ" step="0.01">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Y 坐标（高度）</label>
+                    <input type="number" class="form-input" id="cargoY" step="0.01">
+                </div>
+                <button class="btn btn-secondary" onclick="applyCargoPosition()">应用位置</button>
+
+                <div class="divider"></div>
+
+                <div class="form-row triple">
+                    <div class="form-group">
+                        <label class="form-label">长度 (m)</label>
+                        <input type="number" class="form-input" id="cargoLength" step="0.01" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">宽度 (m)</label>
+                        <input type="number" class="form-input" id="cargoWidth" step="0.01" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">高度 (m)</label>
+                        <input type="number" class="form-input" id="cargoHeight" step="0.01" readonly>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">重量 (kg)</label>
+                    <input type="number" class="form-input" id="cargoWeight" step="0.1" readonly>
+                </div>
+
+                <div class="divider"></div>
+
+                <button class="btn btn-danger" onclick="deleteSelectedCargo()">删除货物</button>
+            </div>
+        </div>
+
+        <!-- 环境零件 -->
+        <div class="panel-section">
+            <div class="panel-title" data-icon="parts" onclick="togglePanel(this)">
+                环境零件
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="form-group">
+                    <label class="form-label">零件类型</label>
+                    <select class="form-select" id="partType" onchange="onPartTypeChange()">
+                        <option value="dock">出库口</option>
+                        <option value="wall">墙面</option>
+                        <option value="staircase">楼梯口</option>
+                        <option value="restroom">厕所</option>
+                        <option value="office">板房办公室</option>
+                        <option value="elevator">电梯</option>
+                    </select>
+                </div>
+                <div class="form-group" id="stairTypeGroup" style="display: none;">
+                    <label class="form-label">楼梯类型</label>
+                    <select class="form-select" id="stairType">
+                        <option value="straight">直梯</option>
+                        <option value="double">双跑楼梯</option>
+                        <option value="spiral">旋转楼梯</option>
+                    </select>
+                </div>
+                <div class="btn-grid">
+                    <button class="btn" onclick="startPlacePart()">放置零件</button>
+                    <button class="btn btn-secondary" onclick="startDrawWallLine()">划线墙面</button>
+                </div>
+                <div id="placementHint" class="hint-box" style="display: none;"></div>
+
+                <div class="divider"></div>
+
+                <div class="form-group">
+                    <label class="form-label">库道宽度 (米)</label>
+                    <input type="number" class="form-input" id="aisleWidth" min="0.5" max="10" value="2" step="0.1">
+                </div>
+                <button class="btn" id="aisleLayingBtn" onclick="toggleAisleMode()">🛤️ 铺设库道</button>
+                <div class="btn-grid" id="aisleToolButtons" style="display: none; margin-top: 8px;">
+                    <button class="btn btn-danger" onclick="deleteAislePoint()">🗑️ 删除点</button>
+                    <button class="btn btn-secondary" onclick="clearAllAislePaths()">清空所有</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 选中零件控制 -->
+        <div class="panel-section" id="selectedPartPanel" style="display: none;">
+            <div class="panel-title" data-icon="part-edit" onclick="togglePanel(this)">
+                选中零件控制
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">X 坐标</label>
+                        <input type="number" class="form-input" id="partX" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Z 坐标</label>
+                        <input type="number" class="form-input" id="partZ" step="0.1">
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="window.PartsModule.applyPartPosition()">应用位置</button>
+
+                <div class="divider"></div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">旋转角度</label>
+                        <input type="number" class="form-input" id="partRotation" step="15">
+                    </div>
+                    <div>
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-secondary" onclick="window.PartsModule.rotatePartBy90()"
+                            style="margin-bottom:0;">+90°</button>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="window.PartsModule.applyPartRotation()">应用旋转</button>
+
+                <div class="form-row" id="partLengthGroup" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">长度</label>
+                        <input type="number" class="form-input" id="partLength" step="0.5" min="1" value="6">
+                    </div>
+                    <div class="form-group" id="partHeightGroup">
+                        <label class="form-label">高度</label>
+                        <input type="number" class="form-input" id="partHeight" step="0.5" min="1" value="3">
+                    </div>
+                </div>
+                <button class="btn btn-secondary" id="applyPartSizeBtn" style="display: none;"
+                    onclick="window.PartsModule.applyPartSize()">应用尺寸</button>
+
+                <button class="btn btn-danger" onclick="window.PartsModule.deletePart()">删除零件</button>
+            </div>
+        </div>
+
+        <!-- 视角控制 -->
+        <div class="panel-section">
+            <div class="panel-title" data-icon="camera" onclick="togglePanel(this)">
+                视角控制
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="panel-content">
+                <div class="btn-grid">
+                    <button class="btn btn-secondary" onclick="setView('front')">前视图</button>
+                    <button class="btn btn-secondary" onclick="setView('top')">顶视图</button>
+                    <button class="btn btn-secondary" onclick="setView('side')">侧视图</button>
+                    <button class="btn btn-secondary" onclick="setView('isometric')">等轴测</button>
+                </div>
+                <div class="btn-grid">
+                    <button class="btn btn-secondary" onclick="zoomIn()">放大</button>
+                    <button class="btn btn-secondary" onclick="zoomOut()">缩小</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D场景 -->
+    <div class="scene-container">
+        <canvas id="renderCanvas"></canvas>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar">
+        <div class="status-item">
+            总库位: <span class="status-value" id="totalCells">0</span>
+        </div>
+        <div class="status-item">
+            已占用: <span class="status-value" id="occupiedCells">0</span>
+        </div>
+        <div class="status-item">
+            空闲: <span class="status-value" id="freeCells">0</span>
+        </div>
+        <div class="status-item">
+            选中货架: <span class="status-value" id="selectedShelf">无</span>
+        </div>
+        <div class="status-item">
+            零件: <span class="status-value" id="partsCount">出库口: 0, 墙面: 0</span>
+        </div>
+        <div class="status-item">
+            选中零件: <span class="status-value" id="selectedPartName">无</span>
+        </div>
+    </div>
+
+    <!-- 信息面板 -->
+    <div class="info-panel" id="shelfInfo">
+        <div class="info-title">货架信息</div>
+        <div class="info-content">
+            <div class="info-row">
+                <span class="info-label">名称:</span>
+                <span class="info-value" id="infoName">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">位置:</span>
+                <span class="info-value" id="infoPosition">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">尺寸:</span>
+                <span class="info-value" id="infoDimensions">-</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 环境配置模态框 -->
+    <div class="modal-overlay" id="envConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">环境配置</div>
+            <div class="modal-body">
+                <!-- 空间尺寸 -->
+                <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #444;">
+                    <div style="font-size: 13px; color: #4fc3f7; margin-bottom: 10px; font-weight: 500;">空间尺寸</div>
+                    <div class="form-row" style="margin-bottom: 0;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">长度 (米)</label>
+                            <input type="number" class="form-input" id="spaceLength" min="10" max="500" step="5"
+                                value="50">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">宽度 (米)</label>
+                            <input type="number" class="form-input" id="spaceWidth" min="10" max="500" step="5"
+                                value="50">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 颜色设置 -->
+                <div style="font-size: 13px; color: #4fc3f7; margin-bottom: 10px; font-weight: 500;">颜色设置</div>
+                <div class="color-picker-group">
+                    <span class="color-picker-label">地板颜色:</span>
+                    <input type="color" class="color-picker-input" id="floorColorPicker" value="#333333">
+                    <input type="text" class="color-hex-input" id="floorColorHex" value="#333333" maxlength="7">
+                </div>
+                <div class="color-picker-group">
+                    <span class="color-picker-label">网格颜色1:</span>
+                    <input type="color" class="color-picker-input" id="gridColor1Picker" value="#444444">
+                    <input type="text" class="color-hex-input" id="gridColor1Hex" value="#444444" maxlength="7">
+                </div>
+                <div class="color-picker-group">
+                    <span class="color-picker-label">网格颜色2:</span>
+                    <input type="color" class="color-picker-input" id="gridColor2Picker" value="#222222">
+                    <input type="text" class="color-hex-input" id="gridColor2Hex" value="#222222" maxlength="7">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEnvConfig()">取消</button>
+                <button class="btn" onclick="applyEnvConfig()">应用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SKU配置模态框 -->
+    <div class="modal-overlay" id="skuConfigModal">
+        <div class="sku-modal-content">
+            <div class="sku-modal-header">
+                <span>📦 SKU配置 - 货物种类管理</span>
+                <button class="close-btn" onclick="closeSkuModal()">&times;</button>
+            </div>
+            <div class="sku-modal-body">
+                <!-- SKU列表 -->
+                <div class="sku-list-section">
+                    <div class="sku-list-header">SKU列表</div>
+                    <div id="skuListContainer">
+                        <div class="sku-empty">暂无SKU数据，请添加新的货物种类</div>
+                    </div>
+                </div>
+                <!-- SKU表单 -->
+                <div class="sku-form-section">
+                    <div class="sku-form-title">添加/编辑SKU</div>
+
+                    <div class="sku-form-row">
+                        <div class="sku-form-group">
+                            <label>货物名称 *</label>
+                            <input type="text" id="skuName" placeholder="例如：小米手机">
+                        </div>
+                        <div class="sku-form-group">
+                            <label>SKU编码</label>
+                            <input type="text" id="skuCode" placeholder="自动生成">
+                        </div>
+                    </div>
+
+                    <div class="sku-form-row triple">
+                        <div class="sku-form-group">
+                            <label>长度 (米)</label>
+                            <input type="number" id="skuLength" step="0.01" min="0.01" value="0.5">
+                        </div>
+                        <div class="sku-form-group">
+                            <label>宽度 (米)</label>
+                            <input type="number" id="skuWidth" step="0.01" min="0.01" value="0.3">
+                        </div>
+                        <div class="sku-form-group">
+                            <label>高度 (米)</label>
+                            <input type="number" id="skuHeight" step="0.01" min="0.01" value="0.2">
+                        </div>
+                    </div>
+
+                    <div class="sku-form-group">
+                        <label>重量 (kg)</label>
+                        <input type="number" id="skuWeight" step="0.1" min="0.01" value="1.0" style="width: 120px;">
+                    </div>
+
+                    <div class="sku-image-upload">
+                        <label>SKU贴图（单张）</label>
+                        <div id="skuImagePreview" onclick="triggerImageUpload()">
+                            <div class="upload-placeholder">点击上传图片</div>
+                        </div>
+                        <input type="file" id="skuImageInput" accept="image/*" onchange="handleImageUpload(event)">
+                    </div>
+
+                    <div class="sku-textures-upload">
+                        <label>多面贴图（6个面）</label>
+                        <div class="textures-grid">
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">上 (Top)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('top')"
+                                    id="texturePreviewTop">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('top')" title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputTop" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'top')">
+                            </div>
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">下 (Bottom)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('bottom')"
+                                    id="texturePreviewBottom">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('bottom')"
+                                    title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputBottom" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'bottom')">
+                            </div>
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">前 (Front)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('front')"
+                                    id="texturePreviewFront">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('front')"
+                                    title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputFront" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'front')">
+                            </div>
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">后 (Back)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('back')"
+                                    id="texturePreviewBack">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('back')" title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputBack" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'back')">
+                            </div>
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">左 (Left)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('left')"
+                                    id="texturePreviewLeft">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('left')" title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputLeft" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'left')">
+                            </div>
+                            <div class="texture-upload-item">
+                                <div class="texture-upload-label">右 (Right)</div>
+                                <div class="texture-preview" onclick="triggerTextureUpload('right')"
+                                    id="texturePreviewRight">
+                                    <div class="upload-placeholder">点击上传</div>
+                                </div>
+                                <button class="texture-remove-btn" onclick="removeTexture('right')"
+                                    title="删除">×</button>
+                                <input type="file" class="texture-input" id="textureInputRight" accept="image/*"
+                                    onchange="handleTextureUpload(event, 'right')">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sku-form-actions">
+                        <button class="btn btn-secondary" onclick="clearSkuForm()">清空</button>
+                        <button class="btn" id="saveSkuBtn" onclick="saveSku()">添加SKU</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加货物模态框 -->
+    <div class="modal-overlay" id="addCargoModal">
+        <div class="cargo-modal-content">
+            <div class="cargo-modal-header">
+                <span>📦 添加货物 - 选择SKU</span>
+                <button class="close-btn" onclick="cancelCargoModal()">&times;</button>
+            </div>
+            <div class="cargo-modal-body">
+                <div class="cargo-sku-list-title">请选择要放置的货物种类：</div>
+                <div id="cargoSkuListContainer">
+                    <div class="cargo-sku-empty">加载中...</div>
+                </div>
+                <div id="cargoPlacementHint"></div>
+            </div>
+            <div class="cargo-modal-footer">
+                <button class="btn btn-secondary" onclick="cancelCargoModal()">取消</button>
+                <button class="btn" onclick="enterCargoPlacementMode()">开始放置</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/info.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/shelf.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/parts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/events.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/measure.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/control.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/environment.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sku.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cargo.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/aisle.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // 面板折叠功能
+        function togglePanel(titleElement) {
+            const section = titleElement.closest('.panel-section');
+            section.classList.toggle('collapsed');
+        }
+
+        // 零件类型切换时显示/隐藏楼梯类型选择
+        function onPartTypeChange() {
+            const partType = document.getElementById('partType').value;
+            const stairTypeGroup = document.getElementById('stairTypeGroup');
+            if (stairTypeGroup) {
+                stairTypeGroup.style.display = (partType === 'staircase') ? 'block' : 'none';
+            }
+        }
+
+        // 开始放置零件
+        function startPlacePart() {
+            const partType = document.getElementById('partType').value;
+            if (partType === 'staircase') {
+                const stairType = document.getElementById('stairType').value;
+                window.currentStairType = stairType;  // 保存楼梯类型供放置时使用
+            }
+            window.PartsModule.enterPlacementMode(partType);
+        }
+    </script>
+</body>
+
+</html>
